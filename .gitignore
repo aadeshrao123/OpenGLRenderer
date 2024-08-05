@@ -1,0 +1,71 @@
+# Ignore build directories
+build/
+cmake-build-*/
+
+# Ignore temporary files and directories
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+*.log
+
+# Ignore compiled object files and libraries
+*.o
+*.obj
+*.lib
+*.dll
+*.so
+*.dylib
+*.exe
+*.out
+
+# Ignore editor-specific files
+.vscode/
+.idea/
+*.code-workspace
+
+# Ignore OS-generated files
+.DS_Store
+Thumbs.db
+
+# Ignore dependency directories
+external/glfw/.git
+external/glew/.git
+
+# Ignore CMake generated files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# Ignore project files
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.sln
+*.user
+*.ncb
+*.suo
+*.pdb
+*.opendb
+*.VC.opendb
+*.sdf
+*.ipch
+*.tlog
+*.lastbuildstate
+*.idb
+*.dir
+
+# Ignore executables
+*.exe
+
+# Ignore logs and debugging files
+*.log
+*.dmp
+*.stackdump
+*.debug
+
+# Ignore auto-generated documentation
+docs/doxygen/
