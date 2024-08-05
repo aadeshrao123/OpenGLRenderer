@@ -29,9 +29,12 @@ cmake-build-*/
 .DS_Store
 Thumbs.db
 
-# Ignore dependency directories
+# Ignore dependency directories except glew
 external/glfw/.git
-external/glew/.git
+# Ignore everything in the external/glew directory except the actual content
+external/glew/*
+!external/glew/.git
+!external/glew/**
 
 # Ignore CMake generated files
 CMakeFiles/
@@ -57,9 +60,6 @@ compile_commands.json
 *.lastbuildstate
 *.idb
 *.dir
-
-# Ignore executables
-*.exe
 
 # Ignore logs and debugging files
 *.log
