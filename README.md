@@ -25,7 +25,7 @@ OpenGLRenderer is a testing and learning project developed in my free time to un
 
 1. **Clone the Repository**:
     ```sh
-    git clone https://github.com/yourusername/OpenGLRenderer.git
+    git clone https://github.com/aadeshrao123/OpenGLRenderer.git
     cd OpenGLRenderer
     ```
 
