@@ -18,6 +18,9 @@ add_subdirectory(external/tinygltf)
 set(GLM_DIR "${CMAKE_SOURCE_DIR}/external/glm")
 include_directories(${GLM_DIR})
 
+# Add ImGui
+add_subdirectory(external/imgui)
+
 # Find OpenGL
 find_package(OpenGL REQUIRED)
 
@@ -27,6 +30,8 @@ include_directories(
     external/glfw/include 
     ${CMAKE_SOURCE_DIR}/external/glew/include
     ${CMAKE_SOURCE_DIR}/external/tinygltf
+    ${CMAKE_SOURCE_DIR}/external/imgui
+    ${CMAKE_SOURCE_DIR}/external/imgui/backends
 )
 
 # Source files
@@ -47,4 +52,5 @@ target_link_libraries(OpenGLRenderer
     glew_s
     glfw
     tinygltf
+    imgui
 )
