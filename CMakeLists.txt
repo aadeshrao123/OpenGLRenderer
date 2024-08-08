@@ -32,17 +32,11 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/external/tinygltf
     ${CMAKE_SOURCE_DIR}/external/imgui
     ${CMAKE_SOURCE_DIR}/external/imgui/backends
+    ${CMAKE_SOURCE_DIR}/src
 )
 
-# Source files
-set(SOURCES 
-    src/main.cpp 
-    src/Camera.cpp 
-    src/Shader.cpp 
-    src/Model.cpp 
-    src/Texture.cpp
-    src/Light.h
-)
+# Automatically find all source and header files in the src directory
+file(GLOB_RECURSE SOURCES "src/*.cpp" "src/*.h")
 
 # Add executable
 add_executable(OpenGLRenderer ${SOURCES})

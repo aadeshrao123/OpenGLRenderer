@@ -9,6 +9,7 @@ cmake-build-*/
 *.swo
 *~
 *.log
+*.ini
 
 # Ignore compiled object files and libraries
 *.o
