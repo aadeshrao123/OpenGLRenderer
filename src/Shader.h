@@ -5,6 +5,8 @@
 #include <GL/glew.h>
 #include <glm/fwd.hpp>
 
+#include "Light.h"
+
 class Shader
 {
 public:
@@ -16,6 +18,7 @@ public:
     void setInt(const std::string& name, int value) const;
     void setFloat(const std::string& name, float value) const;
     void setVec3(const std::string& name, const glm::vec3& value) const;
+    void setLight(const std::string& name, const Light& light) const;
     void setMat4(const std::string& name, const glm::mat4& mat) const;
 
 private:

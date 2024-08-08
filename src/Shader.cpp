@@ -4,6 +4,8 @@
 #include <sstream>
 #include <glm/gtc/type_ptr.hpp>
 
+#include "Light.h"
+
 Shader::Shader(const std::string& vertexPath, const std::string& fragmentPath)
 {
     std::string vertexCode = readFile(vertexPath);
@@ -55,6 +57,12 @@ void Shader::setFloat(const std::string& name, float value) const
 void Shader::setVec3(const std::string& name, const glm::vec3& value) const
 {
     glUniform3fv(glGetUniformLocation(ID, name.c_str()), 1, glm::value_ptr(value));
+}
+
+void Shader::setLight(const std::string& name, const Light& light) const
+{
+    setVec3(name + ".position", light.position);
+    setVec3(name + ".color", light.color);
 }
 
 void Shader::setMat4(const std::string& name, const glm::mat4& mat) const

@@ -5,6 +5,9 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <filesystem>
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
 #include "Camera.h"
 #include "Shader.h"
 #include "Model.h"
@@ -15,6 +18,10 @@
 Camera camera(glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0.0f, 1.0f, 0.0f), -90.0f, 0.0f);
 float lastX = 400, lastY = 300;
 bool firstMouse = true;
+
+// Light colors
+glm::vec3 lightColor1(5.0f, 5.0f, 5.0f);
+glm::vec3 lightColor2(5.0f, 5.0f, 5.0f);
 
 void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 {
@@ -63,6 +70,59 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
     glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projectionMat));
 }
 
+void initializeImGui(GLFWwindow* window)
+{
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;      // Enable Docking
+    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;    // Enable Multi-Viewport / Platform Windows
+
+    ImGui::StyleColorsDark();
+    ImGuiStyle& style = ImGui::GetStyle();
+    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+    {
+        style.WindowRounding = 0.0f;
+        style.Colors[ImGuiCol_WindowBg].w = 1.0f;
+    }
+
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 330");
+}
+
+void renderImGui()
+{
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    // Example ImGui window
+    ImGui::Begin("Settings");
+
+    if (ImGui::CollapsingHeader("Light Colors"))
+    {
+        ImGui::ColorEdit3("Light 1 Color", (float*)&lightColor1);
+        ImGui::ColorEdit3("Light 2 Color", (float*)&lightColor2);
+    }
+
+    ImGui::End();
+
+    // Rendering
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+    // Update and Render additional Platform Windows
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+    {
+        GLFWwindow* backup_current_context = glfwGetCurrentContext();
+        ImGui::UpdatePlatformWindows();
+        ImGui::RenderPlatformWindowsDefault();
+        glfwMakeContextCurrent(backup_current_context);
+    }
+}
+
 int main()
 {
     std::filesystem::current_path("../");
@@ -88,7 +148,7 @@ int main()
     }
 
     glfwMakeContextCurrent(window);
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    //glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetKeyCallback(window, keyCallback);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
@@ -99,6 +159,9 @@ int main()
         std::cerr << "Failed to initialize GLEW" << std::endl;
         return -1;
     }
+
+    // Initialize ImGui
+    initializeImGui(window);
 
     Shader shader("shaders/raytrace.vert", "shaders/raytrace.frag");
     GLuint shaderProgram = shader.ID;
@@ -115,8 +178,8 @@ int main()
     };
     GLuint cubemapTexture = loadCubeMap(faces);
 
-    Light light1 = {glm::vec3(1.2f, 1.0f, 2.0f), glm::vec3(5.0f, 5.0f, 5.0f)};
-    Light light2 = {glm::vec3(-1.2f, -1.0f, -2.0f), glm::vec3(5.0f, 5.0f, 5.0f)};
+    Light light1 = {glm::vec3(1.2f, 1.0f, 2.0f), lightColor1};
+    Light light2 = {glm::vec3(-1.2f, -1.0f, -2.0f), lightColor2};
 
     glEnable(GL_DEPTH_TEST);
     auto modelMat = glm::mat4(1.0f);
@@ -125,10 +188,8 @@ int main()
     shader.use();
     shader.setMat4("model", modelMat);
     shader.setMat4("projection", projectionMat);
-    shader.setVec3("lightPos1", light1.position);
-    shader.setVec3("lightColor1", light1.color);
-    shader.setVec3("lightPos2", light2.position);
-    shader.setVec3("lightColor2", light2.color);
+    shader.setLight("light1", light1);
+    shader.setLight("light2", light2);
     shader.setInt("skybox", 1);
 
     bool diffuseTextureBound = false;
@@ -166,6 +227,12 @@ int main()
         shader.setMat4("view", viewMat);
         shader.setVec3("viewPos", camera.position);
 
+        // Update light colors from ImGui
+        light1.color = lightColor1;
+        light2.color = lightColor2;
+        shader.setLight("light1", light1);
+        shader.setLight("light2", light2);
+
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glActiveTexture(GL_TEXTURE2);
@@ -173,11 +240,20 @@ int main()
 
         model.draw(shaderProgram);
 
+        // Render ImGui
+        renderImGui();
+
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
+    // Shutdown ImGui
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
     glfwDestroyWindow(window);
     glfwTerminate();
+
     return 0;
 }

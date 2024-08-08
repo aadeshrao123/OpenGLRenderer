@@ -41,6 +41,7 @@ set(SOURCES
     src/Shader.cpp 
     src/Model.cpp 
     src/Texture.cpp
+    src/Light.h
 )
 
 # Add executable
