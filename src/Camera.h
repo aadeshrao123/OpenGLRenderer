@@ -2,6 +2,14 @@
 #define CAMERA_H
 
 #include <glm/glm.hpp>
+enum Camera_Movement {
+    FORWARD,
+    BACKWARD,
+    LEFT,
+    RIGHT,
+    UP,
+    DOWN
+};
 
 class Camera
 {
@@ -9,7 +17,7 @@ public:
     Camera(glm::vec3 position, glm::vec3 up, float yaw, float pitch);
 
     glm::mat4 getViewMatrix();
-    void processKeyboard(int direction, float deltaTime);
+    void processKeyboard(Camera_Movement direction, float deltaTime);
     void processMouseMovement(float xoffset, float yoffset, bool constrainPitch = true);
 
     glm::vec3 position;

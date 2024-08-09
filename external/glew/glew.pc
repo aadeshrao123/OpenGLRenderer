@@ -1,6 +1,6 @@
-prefix=C:/Program Files (x86)/OpenGLRenderer
+prefix=C:/Program Files/OpenGLRenderer
 exec_prefix=${prefix}
-libdir=C:/Program Files (x86)/OpenGLRenderer/lib
+libdir=C:/Program Files/OpenGLRenderer/lib
 includedir=${prefix}/include
 
 Name: glew

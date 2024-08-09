@@ -3,11 +3,11 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
 #include <iostream>
 #include <filesystem>
-#include "imgui.h"
-#include "imgui_impl_glfw.h"
-#include "imgui_impl_opengl3.h"
 #include "Camera.h"
 #include "Shader.h"
 #include "Model.h"
@@ -18,27 +18,13 @@
 Camera camera(glm::vec3(0.0f, 0.0f, 5.0f), glm::vec3(0.0f, 1.0f, 0.0f), -90.0f, 0.0f);
 float lastX = 400, lastY = 300;
 bool firstMouse = true;
+glm::vec3 lightColor1(1.0f, 1.0f, 1.0f);
+glm::vec3 lightColor2(1.0f, 1.0f, 1.0f);
 
-// Light colors
-glm::vec3 lightColor1(5.0f, 5.0f, 5.0f);
-glm::vec3 lightColor2(5.0f, 5.0f, 5.0f);
-
-void mouse_callback(GLFWwindow* window, double xpos, double ypos)
-{
-    if (firstMouse)
-    {
-        lastX = xpos;
-        lastY = ypos;
-        firstMouse = false;
-    }
-
-    float xoffset = xpos - lastX;
-    float yoffset = lastY - ypos;
-    lastX = xpos;
-    lastY = ypos;
-
-    camera.processMouseMovement(xoffset, yoffset);
-}
+// Framebuffer
+GLuint framebuffer, textureColorbuffer, rbo;
+bool mouseInViewport = false;
+bool rightMousePressed = false;
 
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
@@ -48,79 +34,150 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
     }
 }
 
-void processInput(GLFWwindow* window)
+void processInput(GLFWwindow* window, Camera& camera, float deltaTime)
 {
-    const float deltaTime = 0.01f; // Adjust accordingly
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        camera.processKeyboard(0, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        camera.processKeyboard(1, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        camera.processKeyboard(2, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        camera.processKeyboard(3, deltaTime);
+    if (mouseInViewport && rightMousePressed)
+    {
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+            camera.processKeyboard(FORWARD, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+            camera.processKeyboard(BACKWARD, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+            camera.processKeyboard(LEFT, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+            camera.processKeyboard(RIGHT, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
+            camera.processKeyboard(UP, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
+            camera.processKeyboard(DOWN, deltaTime);
+
+        // Handle mouse input
+        double xpos, ypos;
+        glfwGetCursorPos(window, &xpos, &ypos);
+
+        float xoffset = xpos - lastX;
+        float yoffset = lastY - ypos; // Reversed since y-coordinates go from bottom to top
+
+        lastX = xpos;
+        lastY = ypos;
+
+        camera.processMouseMovement(xoffset, yoffset);
+    }
 }
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
     glViewport(0, 0, width, height);
-    glm::mat4 projectionMat = glm::perspective(glm::radians(45.0f), (float)width / height, 0.1f, 100.0f);
-    GLuint shaderProgram = *((GLuint*)glfwGetWindowUserPointer(window));
-    glUseProgram(shaderProgram);
-    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projectionMat));
 }
 
-void initializeImGui(GLFWwindow* window)
+void renderToFramebuffer(Shader& shader, Model& model, GLuint cubemapTexture, int framebufferWidth, int framebufferHeight)
 {
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
-    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;      // Enable Docking
-    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;    // Enable Multi-Viewport / Platform Windows
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+    glViewport(0, 0, framebufferWidth, framebufferHeight);
+    glClearColor(0.53f, 0.81f, 0.98f, 1.0f); // Light blue background
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    ImGui::StyleColorsDark();
-    ImGuiStyle& style = ImGui::GetStyle();
-    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-    {
-        style.WindowRounding = 0.0f;
-        style.Colors[ImGuiCol_WindowBg].w = 1.0f;
-    }
+    shader.use();
+    glm::mat4 viewMat = camera.getViewMatrix();
+    shader.setMat4("view", viewMat);
+    shader.setVec3("viewPos", camera.position);
 
-    ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init("#version 330");
+    Light light1 = { glm::vec3(1.2f, 1.0f, 2.0f), lightColor1 };
+    Light light2 = { glm::vec3(-1.2f, -1.0f, -2.0f), lightColor2 };
+    shader.setLight("light1", light1);
+    shader.setLight("light2", light2);
+
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+
+    model.draw(shader.ID);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0); // Unbind framebuffer
 }
 
-void renderImGui()
+void renderImGui(GLFWwindow* window, Shader& shader, Model& model, GLuint cubemapTexture, int& framebufferWidth, int& framebufferHeight, float deltaTime)
 {
+    // Start the ImGui frame
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    // Example ImGui window
-    ImGui::Begin("Settings");
+    // Create docking space
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->Pos);
+    ImGui::SetNextWindowSize(viewport->Size);
+    ImGui::SetNextWindowViewport(viewport->ID);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::Begin("DockSpace", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoDocking);
+    ImGui::PopStyleVar(3);
 
-    if (ImGui::CollapsingHeader("Light Colors"))
+    ImGuiID dockspace_id = ImGui::GetID("MyDockspace");
+    ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode);
+    ImGui::End();
+
+    // Light Control Tab
+    ImGui::Begin("Light Control");
+    ImGui::ColorEdit3("Light 1 Color", glm::value_ptr(lightColor1));
+    ImGui::ColorEdit3("Light 2 Color", glm::value_ptr(lightColor2));
+    ImGui::End();
+
+    // 3D Viewport Tab
+    ImGui::Begin("3D Viewport");
+
+    // Get the position of the cursor at the start of the viewport
+    ImVec2 viewportPos = ImGui::GetCursorScreenPos();
+    // Get the size of the available space in the viewport
+    ImVec2 viewportSize = ImGui::GetContentRegionAvail();
+
+    if (framebufferWidth != (int)viewportSize.x || framebufferHeight != (int)viewportSize.y)
     {
-        ImGui::ColorEdit3("Light 1 Color", (float*)&lightColor1);
-        ImGui::ColorEdit3("Light 2 Color", (float*)&lightColor2);
+        framebufferWidth = (int)viewportSize.x;
+        framebufferHeight = (int)viewportSize.y;
+
+        // Resize framebuffer attachments
+        glBindTexture(GL_TEXTURE_2D, textureColorbuffer);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, framebufferWidth, framebufferHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+
+        glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, framebufferWidth, framebufferHeight);
+    }
+
+    // Render to framebuffer with the new size
+    renderToFramebuffer(shader, model, cubemapTexture, framebufferWidth, framebufferHeight);
+
+    // Display the framebuffer texture in the ImGui window
+    ImGui::Image((void*)(intptr_t)textureColorbuffer, viewportSize, ImVec2(0, 1), ImVec2(1, 0));
+
+    // Check if the mouse is in the viewport
+    mouseInViewport = ImGui::IsItemHovered();
+
+    // Handle right mouse button behavior
+    if (mouseInViewport && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+    {
+        rightMousePressed = true;
+        firstMouse = true;  // Reset the initial mouse state
+        // Set the initial mouse position to where the right-click happened
+        ImVec2 mousePos = ImGui::GetMousePos();
+        lastX = mousePos.x;
+        lastY = mousePos.y;
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    }
+    if (rightMousePressed && ImGui::IsMouseReleased(ImGuiMouseButton_Right))
+    {
+        rightMousePressed = false;
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
     }
 
     ImGui::End();
 
-    // Rendering
+    // Process input
+    processInput(window, camera, deltaTime);
+
+    // Render ImGui
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-    // Update and Render additional Platform Windows
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-    {
-        GLFWwindow* backup_current_context = glfwGetCurrentContext();
-        ImGui::UpdatePlatformWindows();
-        ImGui::RenderPlatformWindowsDefault();
-        glfwMakeContextCurrent(backup_current_context);
-    }
 }
 
 int main()
@@ -148,8 +205,6 @@ int main()
     }
 
     glfwMakeContextCurrent(window);
-    //glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetKeyCallback(window, keyCallback);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
@@ -160,8 +215,15 @@ int main()
         return -1;
     }
 
-    // Initialize ImGui
-    initializeImGui(window);
+    // Setup ImGui context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // Enable Docking
+
+    ImGui::StyleColorsDark();
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 330");
 
     Shader shader("shaders/raytrace.vert", "shaders/raytrace.frag");
     GLuint shaderProgram = shader.ID;
@@ -178,18 +240,43 @@ int main()
     };
     GLuint cubemapTexture = loadCubeMap(faces);
 
-    Light light1 = {glm::vec3(1.2f, 1.0f, 2.0f), lightColor1};
-    Light light2 = {glm::vec3(-1.2f, -1.0f, -2.0f), lightColor2};
+    Light light1 = { glm::vec3(1.2f, 1.0f, 2.0f), lightColor1 };
+    Light light2 = { glm::vec3(-1.2f, -1.0f, -2.0f), lightColor2 };
+
+    // Create framebuffer for offscreen rendering
+    glGenFramebuffers(1, &framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+
+    // Create a color attachment texture
+    glGenTextures(1, &textureColorbuffer);
+    glBindTexture(GL_TEXTURE_2D, textureColorbuffer);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 800, 600, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureColorbuffer, 0);
+
+    // Create a renderbuffer object for depth and stencil attachment
+    glGenRenderbuffers(1, &rbo);
+    glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, 800, 600);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        std::cerr << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     glEnable(GL_DEPTH_TEST);
-    auto modelMat = glm::mat4(1.0f);
+
+    glm::mat4 modelMat = glm::mat4(1.0f);
     glm::mat4 projectionMat = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
 
     shader.use();
     shader.setMat4("model", modelMat);
     shader.setMat4("projection", projectionMat);
-    shader.setLight("light1", light1);
-    shader.setLight("light2", light2);
+    shader.setVec3("lightPos1", light1.position);
+    shader.setVec3("lightColor1", light1.color);
+    shader.setVec3("lightPos2", light2.position);
+    shader.setVec3("lightColor2", light2.color);
     shader.setInt("skybox", 1);
 
     bool diffuseTextureBound = false;
@@ -218,42 +305,26 @@ int main()
         }
     }
 
+    int framebufferWidth = 800, framebufferHeight = 600;
+
     while (!glfwWindowShouldClose(window))
     {
-        processInput(window);
+        float deltaTime = 0.01f; // Adjust as needed
 
-        glm::mat4 viewMat = camera.getViewMatrix();
-        shader.use();
-        shader.setMat4("view", viewMat);
-        shader.setVec3("viewPos", camera.position);
-
-        // Update light colors from ImGui
-        light1.color = lightColor1;
-        light2.color = lightColor2;
-        shader.setLight("light1", light1);
-        shader.setLight("light2", light2);
-
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        glActiveTexture(GL_TEXTURE2);
-        glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
-
-        model.draw(shaderProgram);
-
-        // Render ImGui
-        renderImGui();
-
-        glfwSwapBuffers(window);
         glfwPollEvents();
+
+        // Start the ImGui frame and render everything
+        renderImGui(window, shader, model, cubemapTexture, framebufferWidth, framebufferHeight, deltaTime);
+
+        // Swap buffers and poll events
+        glfwSwapBuffers(window);
     }
 
-    // Shutdown ImGui
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 
     glfwDestroyWindow(window);
     glfwTerminate();
-
     return 0;
 }
